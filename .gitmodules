@@ -1,0 +1,3 @@
+[submodule "consensus_fuzz/corpus/consensus-spec-tests"]
+	path = consensus_fuzz/corpus/consensus-spec-tests
+	url = https://github.com/ethereum/consensus-spec-tests
