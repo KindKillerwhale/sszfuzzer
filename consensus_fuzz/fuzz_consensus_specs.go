@@ -278,12 +278,11 @@ func collectValidCorpus[T newableObject[U], U any](f *testing.F, kind string, co
 
 				// Add the valid ssz stream to the fuzzer
 				f.Add(inSSZ)
-			} else {
-				// Confirm that broken file do not exist
-				// f.Fatalf("unexpected decode error => the file might be broken %v: %v", path, err)
-				f.Logf("unexpected decode error => the file might be broken %v: %v", path, err)
-				continue
-			}
+			} // else {
+			// Confirm that broken file do not exist
+			// f.Fatalf("unexpected decode error => the file might be broken %v: %v", path, err)
+			// f.Logf("unexpected decode error => the file might be broken %v: %v", path, err)
+			// }
 		}
 	}
 	return valids
