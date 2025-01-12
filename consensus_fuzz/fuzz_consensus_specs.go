@@ -440,7 +440,8 @@ func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T
 			sz2 := ssz.SizeOnFork(obj, forkVal)
 			out := make([]byte, sz2)
 			if err2 := ssz.EncodeToBytesOnFork(out, obj, forkVal); err2 == nil {
-				t.Logf("[crossFork] fork=%s => decode+encode ok (size=%d)", forkName, sz2)
+				// t.Logf("[crossFork] fork=%s => decode+encode ok (size=%d)", forkName, sz2)
+				continue
 			} else {
 				t.Logf("[crossFork] fork=%s => re-encode fail: %v", forkName, err2)
 			}
