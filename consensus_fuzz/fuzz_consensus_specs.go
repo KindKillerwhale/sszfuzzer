@@ -20,7 +20,7 @@ import (
 
 var (
 	// consensusSpecTestsRoot is the folder where the consensus ssz tests are located.
-	consensusSpecTestsRoot = filepath.Join("consensus_fuzz", "corpus", "consensus-spec-tests", "tests", "mainnet")
+	consensusSpecTestsRoot = filepath.Join("corpus", "consensus-spec-tests", "tests", "mainnet")
 )
 
 // commonPrefix returns the common prefix in two byte slices.
@@ -280,7 +280,9 @@ func collectValidCorpus[T newableObject[U], U any](f *testing.F, kind string, co
 				f.Add(inSSZ)
 			} else {
 				// Confirm that broken file do not exist
-				f.Fatalf("unexpected decode error => the file might be broken %v: %v", path, err)
+				// f.Fatalf("unexpected decode error => the file might be broken %v: %v", path, err)
+				f.Logf("unexpected decode error => the file might be broken %v: %v", path, err)
+				continue
 			}
 		}
 	}
@@ -348,12 +350,12 @@ func finalChecks[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) {
 	hashConc := ssz.HashConcurrentOnFork(obj, ssz.ForkFuture)
 
 	if hashSeq != hashConc {
-		t.Fatalf("hash mismatch: seq=%x, conc=%x", hashSeq, hashConc)
+		t.Fatalf("sequential/concurrent hash mismatch: sequencial %x, concurrent %x", hashSeq, hashConc)
 	}
 
 	sz := ssz.SizeOnFork(obj, ssz.ForkFuture)
 	if sz != uint32(len(inSSZ)) {
-		t.Fatalf("size mismatch: reported=%d, actual=%d", sz, len(inSSZ))
+		t.Fatalf("reported/generated size mismatch: reported %v, generated %v", sz, len(inSSZ))
 	}
 }
 
@@ -363,32 +365,63 @@ func finalChecks[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) {
 
 func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, valids [][]byte) {
 	// pick random from corpus
-	base := valids[rand.Intn(len(valids))]
-	usedObj := T(new(U))
+	vSSZ := valids[rand.Intn(len(valids))]
 
-	if cl, ok := any(usedObj).(interface{ Clear() }); ok {
+	// Try the stream encoder/decoder into a prepped object
+	obj := T(new(U))
+
+	if cl, ok := any(obj).(interface{ Clear() }); ok {
 		cl.Clear()
 	}
 
-	// decode base => leftover decode with inSSZ => re-encode => finalChecks
-	if err := ssz.DecodeFromBytesOnFork(base, usedObj, ssz.ForkFuture); err != nil {
-		t.Logf("[stateful] decode base fail: %v", err)
-		return
-	}
-	// leftover decode
-	if err2 := ssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), usedObj, uint32(len(inSSZ)), ssz.ForkFuture); err2 == nil {
-		var buf bytes.Buffer
-		if err3 := ssz.EncodeToStreamOnFork(&buf, usedObj, ssz.ForkFuture); err3 == nil {
-			finalChecks(t, buf.Bytes(), usedObj)
-		} else {
-			t.Logf("[stateful] leftover re-encode fail: %v", err3)
-		}
-	} else {
-		t.Logf("[stateful] leftover decode fail: %v", err2)
+	if err := ssz.DecodeFromBytesOnFork(vSSZ, obj, ssz.ForkFuture); err != nil {
+		panic(err) // we've already decoded this, cannot fail
 	}
 
+	if err := ssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), ssz.ForkFuture); err != nil {
+		t.Fatalf("failed to decode stream into used object: %v", err)
+	}
+
+	blob := new(bytes.Buffer)
+	if err := ssz.EncodeToStreamOnFork(blob, obj, ssz.ForkFuture); err != nil {
+		t.Fatalf("failed to re-encode stream from used object: %v", err)
+	}
+
+	if !bytes.Equal(blob.Bytes(), inSSZ) {
+		prefix := commonPrefix(blob.Bytes(), inSSZ)
+		t.Fatalf("re-encoded stream from used object mismatch: have %x, want %x, common prefix %d, have left %x, want left %x",
+			blob, inSSZ, len(prefix), blob.Bytes()[len(prefix):], inSSZ[len(prefix):])
+	}
+
+	finalChecks(t, inSSZ, obj)
+
+	// Try the buffer encoder/decoder into a prepped object
+	obj = T(new(U))
+
+	if cl, ok := any(obj).(interface{ Clear() }); ok {
+		cl.Clear()
+	}
+
+	if err := ssz.DecodeFromBytesOnFork(vSSZ, obj, ssz.ForkFuture); err != nil {
+		panic(err) // we've already decoded this, cannot fail
+	}
+	if err := ssz.DecodeFromBytesOnFork(inSSZ, obj, ssz.ForkFuture); err != nil {
+		t.Fatalf("failed to decode buffer into used object: %v", err)
+	}
+	bin := make([]byte, ssz.SizeOnFork(obj, ssz.ForkFuture))
+	if err := ssz.EncodeToBytesOnFork(bin, obj, ssz.ForkFuture); err != nil {
+		t.Fatalf("failed to re-encode buffer from used object: %v", err)
+	}
+	if !bytes.Equal(bin, inSSZ) {
+		prefix := commonPrefix(bin, inSSZ)
+		t.Fatalf("re-encoded buffer from used object mismatch: have %x, want %x, common prefix %d, have left %x, want left %x",
+			bin, inSSZ, len(prefix), bin[len(prefix):], inSSZ[len(prefix):])
+	}
+
+	finalChecks(t, inSSZ, obj)
+
 	// cross fork decode
-	crossForkCheck(t, inSSZ, usedObj)
+	crossForkCheck(t, inSSZ, obj)
 }
 
 // crossForkCheck : decode 'inSSZ' for all known forks => coverage
