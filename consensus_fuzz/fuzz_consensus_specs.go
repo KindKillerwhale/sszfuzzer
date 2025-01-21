@@ -20,7 +20,9 @@ import (
 
 var (
 	// consensusSpecTestsRoot is the folder where the consensus ssz tests are located.
-	consensusSpecTestsRoot = filepath.Join("corpus", "consensus-spec-tests", "tests", "mainnet")
+	// It depends on the path of the binary.
+	// Setting the path as a temporary measure
+	consensusSpecTestsRoot = filepath.Join("..", "..", "..", "corpus", "consensus-spec-tests", "tests", "mainnet")
 )
 
 // commonPrefix returns the common prefix in two byte slices.
