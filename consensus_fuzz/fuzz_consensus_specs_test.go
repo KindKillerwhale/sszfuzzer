@@ -15,14 +15,15 @@ import (
 	"github.com/karalabe/ssz"
 
 	// Ethereum consensus spec types (Attestation, BeaconBlock, etc.)
-	types "github.com/karalabe/ssz/tests/testtypes/consensus-spec-tests"
+	// types "github.com/karalabe/ssz/tests/testtypes/consensus-spec-tests"
+	types "github.com/KindKillerwhale/sszfuzzer/types/sszgen"
 )
 
 var (
 	// consensusSpecTestsRoot is the folder where the consensus ssz tests are located.
 	// It depends on the path of the binary.
 	// Setting the path as a temporary measure
-	consensusSpecTestsRoot = filepath.Join("..", "..", "corpus", "consensus-spec-tests", "tests", "mainnet")
+	consensusSpecTestsRoot = filepath.Join("..", "..", "..", "corpus", "consensus-spec-tests", "tests", "mainnet")
 )
 
 // commonPrefix returns the common prefix in two byte slices.
