@@ -65,7 +65,7 @@ function compile_fuzzer() {
   mkdir -p $outdir
 
   mv "$fuzzer" "$fuzzer.a" "$outdir" 2>/dev/null || true
-  mv main_*.go *.h *_fuzz.go "$outdir" 2>/dev/null || true
+  mv main*.go *.h *_fuzz.go "$outdir" 2>/dev/null || true
   cd -
 
   echo "Built fuzzer => $outdir/$fuzzer"
