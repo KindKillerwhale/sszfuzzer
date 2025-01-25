@@ -373,7 +373,7 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, vali
 	obj := T(new(U))
 
 	if cl, ok := any(obj).(interface{ ClearSSZ() }); ok {
-		t.Logf("===> ClearSSZ() is found and will be called!")
+		// t.Logf("===> ClearSSZ() is found and will be called!")
 		cl.ClearSSZ()
 	} else {
 		t.Errorf("===> ClearSSZ() not found on this type.")
