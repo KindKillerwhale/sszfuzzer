@@ -6,16 +6,21 @@ package consensus_fuzz
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/golang/snappy"
+	"github.com/google/go-cmp/cmp"
+	"github.com/holiman/uint256"
 	"github.com/karalabe/ssz"
 
 	// Ethereum consensus spec types (Attestation, BeaconBlock, etc.)
 	// types "github.com/karalabe/ssz/tests/testtypes/consensus-spec-tests"
+	fastssz "github.com/KindKillerwhale/sszfuzzer/types/fastssz"
 	types "github.com/KindKillerwhale/sszfuzzer/types/sszgen"
 )
 
@@ -212,7 +217,11 @@ func fuzzConsensusSpecType[T newableObject[U], U any](f *testing.F, kind string)
 			if decodeStreamRoundtrip(t, inSSZ, obj) {
 				// If decode/encode succeeded, run final checks
 				finalChecks(t, inSSZ, obj)
-				valid = true
+
+				// Do differential fuzz check
+				if differentialCheckFastssz[T, U](t, inSSZ) {
+					valid = true
+				}
 			}
 		}
 
@@ -221,7 +230,11 @@ func fuzzConsensusSpecType[T newableObject[U], U any](f *testing.F, kind string)
 			obj2 := T(new(U))
 			if decodeBufferRoundtrip(t, inSSZ, obj2) {
 				finalChecks(t, inSSZ, obj2)
-				valid = true
+
+				// Do differential fuzz check
+				if differentialCheckFastssz[T, U](t, inSSZ) {
+					valid = true
+				}
 			}
 		}
 
@@ -455,4 +468,429 @@ func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T
 			t.Logf("[crossFork] fork=%s => decode fail: %v", forkName, err)
 		}
 	}
+}
+
+func newFastsszObject[T any]() (fastssz.Object, error) {
+	var zero T
+	rt := reflect.TypeOf(zero)
+
+	switch rt.String() {
+	case "*types.AggregateAndProof{}":
+		return &fastssz.AggregateAndProof{}, nil
+
+	case "*types.AttestationData{}":
+		return &fastssz.AttestationData{}, nil
+
+	case "*types.AttestationDataVariation1{}":
+		return &fastssz.AttestationDataVariation1{}, nil
+
+	case "*types.AttestationDataVariation2{}":
+		return &fastssz.AttestationDataVariation2{}, nil
+
+	case "*types.AttestationDataVariation3{}":
+		return &fastssz.AttestationDataVariation3{}, nil
+
+	case "*types.Attestation{}":
+		return &fastssz.Attestation{}, nil
+
+	case "*types.AttestationVariation1{}":
+		return &fastssz.AttestationVariation1{}, nil
+
+	case "*types.AttestationVariation2{}":
+		return &fastssz.AttestationVariation2{}, nil
+
+	case "*types.AttestationVariation3{}":
+		return &fastssz.AttestationVariation3{}, nil
+
+	case "*types.AttesterSlashing{}":
+		return &fastssz.AttesterSlashing{}, nil
+
+	case "*types.BeaconBlockBodyAltair{}":
+		return &fastssz.BeaconBlockBodyAltair{}, nil
+
+	case "*types.BeaconBlockBodyBellatrix{}":
+		return &fastssz.BeaconBlockBodyBellatrix{}, nil
+
+	case "*types.BeaconBlockBodyCapella{}":
+		return &fastssz.BeaconBlockBodyCapella{}, nil
+
+	case "*types.BeaconBlockBodyDeneb{}":
+		return &fastssz.BeaconBlockBodyDeneb{}, nil
+
+	case "*types.BeaconBlockBodyMonolith{}":
+		return &fastssz.BeaconBlockBodyMonolith{}, nil
+
+	case "*types.BeaconBlockBody{}":
+		return &fastssz.BeaconBlockBody{}, nil
+
+	case "*types.BeaconBlockHeader{}":
+		return &fastssz.BeaconBlockHeader{}, nil
+
+	case "*types.BeaconBlock{}":
+		return &fastssz.BeaconBlock{}, nil
+
+	case "*types.BeaconStateAltair{}":
+		return &fastssz.BeaconStateAltair{}, nil
+
+	case "*types.BeaconStateBellatrix{}":
+		return &fastssz.BeaconStateBellatrix{}, nil
+
+	case "*types.BeaconStateCapella{}":
+		return &fastssz.BeaconStateCapella{}, nil
+
+	case "*types.BeaconStateDeneb{}":
+		return &fastssz.BeaconStateDeneb{}, nil
+
+	case "*types.BeaconStateMonolith{}":
+		return &fastssz.BeaconStateMonolith{}, nil
+
+	case "*types.BeaconState{}":
+		return &fastssz.BeaconState{}, nil
+
+	case "*types.BitsStructMonolith{}":
+		return &fastssz.BitsStructMonolith{}, nil
+
+	case "*types.BitsStruct{}":
+		return &fastssz.BitsStruct{}, nil
+
+	case "*types.BLSToExecutionChange{}":
+		return &fastssz.BLSToExecutionChange{}, nil
+
+	case "*types.Checkpoint{}":
+		return &fastssz.Checkpoint{}, nil
+
+	case "*types.DepositData{}":
+		return &fastssz.DepositData{}, nil
+
+	case "*types.DepositMessage{}":
+		return &fastssz.DepositMessage{}, nil
+
+	case "*types.Deposit{}":
+		return &fastssz.Deposit{}, nil
+
+	case "*types.Eth1Block{}":
+		return &fastssz.Eth1Block{}, nil
+
+	case "*types.Eth1Data{}":
+		return &fastssz.Eth1Data{}, nil
+
+	case "*types.ExecutionPayloadCapella{}":
+		return &fastssz.ExecutionPayloadCapella{}, nil
+
+	case "*types.ExecutionPayloadDeneb{}":
+		return &fastssz.ExecutionPayloadDeneb{}, nil
+
+	case "*types.ExecutionPayloadHeaderCapella{}":
+		return &fastssz.ExecutionPayloadHeaderCapella{}, nil
+
+	case "*types.ExecutionPayloadHeaderDeneb{}":
+		return &fastssz.ExecutionPayloadHeaderDeneb{}, nil
+
+	case "*types.ExecutionPayloadHeaderMonolith{}":
+		return &fastssz.ExecutionPayloadHeaderMonolith{}, nil
+
+	case "*types.ExecutionPayloadHeader{}":
+		return &fastssz.ExecutionPayloadHeader{}, nil
+
+	case "*types.ExecutionPayloadMonolith2{}":
+		return &fastssz.ExecutionPayloadMonolith2{}, nil
+
+	case "*types.ExecutionPayloadMonolith{}":
+		return &fastssz.ExecutionPayloadMonolith{}, nil
+
+	case "*types.ExecutionPayload{}":
+		return &fastssz.ExecutionPayload{}, nil
+
+	case "*types.ExecutionPayloadVariation{}":
+		return &fastssz.ExecutionPayloadVariation{}, nil
+
+	case "*types.FixedTestStructMonolith{}":
+		return &fastssz.FixedTestStructMonolith{}, nil
+
+	case "*types.FixedTestStruct{}":
+		return &fastssz.FixedTestStruct{}, nil
+
+	case "*types.Fork{}":
+		return &fastssz.Fork{}, nil
+
+	case "*types.HistoricalBatch{}":
+		return &fastssz.HistoricalBatch{}, nil
+
+	case "*types.HistoricalBatchVariation{}":
+		return &fastssz.HistoricalBatchVariation{}, nil
+
+	case "*types.HistoricalSummary{}":
+		return &fastssz.HistoricalSummary{}, nil
+
+	case "*types.IndexedAttestation{}":
+		return &fastssz.IndexedAttestation{}, nil
+
+	case "*types.PendingAttestation{}":
+		return &fastssz.PendingAttestation{}, nil
+
+	case "*types.ProposerSlashing{}":
+		return &fastssz.ProposerSlashing{}, nil
+
+	case "*types.SignedBeaconBlockHeader{}":
+		return &fastssz.SignedBeaconBlockHeader{}, nil
+
+	case "*types.SignedBLSToExecutionChange{}":
+		return &fastssz.SignedBLSToExecutionChange{}, nil
+
+	case "*types.SignedVoluntaryExit{}":
+		return &fastssz.SignedVoluntaryExit{}, nil
+
+	case "*types.SingleFieldTestStructMonolith{}":
+		return &fastssz.SingleFieldTestStructMonolith{}, nil
+
+	case "*types.SingleFieldTestStruct{}":
+		return &fastssz.SingleFieldTestStruct{}, nil
+
+	case "*types.SmallTestStructMonolith{}":
+		return &fastssz.SmallTestStructMonolith{}, nil
+
+	case "*types.SmallTestStruct{}":
+		return &fastssz.SmallTestStruct{}, nil
+
+	case "*types.SyncAggregate{}":
+		return &fastssz.SyncAggregate{}, nil
+
+	case "*types.SyncCommiteeBits{}":
+		return &fastssz.SyncCommiteeBits{}, nil
+
+	case "*types.ValidatorMonolith{}":
+		return &fastssz.ValidatorMonolith{}, nil
+
+	case "*types.Validator{}":
+		return &fastssz.Validator{}, nil
+
+	case "*types.VoluntaryExit{}":
+		return &fastssz.VoluntaryExit{}, nil
+
+	case "*types.Withdrawal{}":
+		return &fastssz.Withdrawal{}, nil
+
+	case "*types.WithdrawalVariation{}":
+		return &fastssz.WithdrawalVariation{}, nil
+
+	default:
+		return nil, fmt.Errorf("unmapped T => %s", rt.String())
+	}
+}
+
+func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []byte) bool {
+	// 1) Decode with karalabe/ssz
+	objKaralabe := T(new(U))
+
+	if cl, ok := any(objKaralabe).(interface{ ClearSSZ() }); ok {
+		cl.ClearSSZ()
+	}
+
+	if err := ssz.DecodeFromBytesOnFork(inSSZ, objKaralabe, ssz.ForkFuture); err != nil {
+		// If karalabe fails => no comparison
+		return false
+	}
+
+	// 2) Decode with fastssz
+	objFastssz, err := newFastsszObject[T]()
+	if err != nil {
+		t.Logf("[DiffFuzz] no fastssz mapping for %T => skip: %v", objKaralabe, err)
+		return false
+	}
+
+	if err := objFastssz.UnmarshalSSZ(inSSZ); err != nil {
+		t.Logf("[DiffFuzz] fastssz decode fail: %v", err)
+		return false
+	}
+
+	// 3) karalabe -> fastssz Bridging
+	bridged, err := BridgeKaralabeToFastssz(objKaralabe)
+	if err != nil {
+		t.Fatalf("[DiffFuzz] bridging karalabe->fastssz error: %v", err)
+		return false
+	}
+
+	// 3) bridged vs objFastssz
+	diff := cmp.Diff(bridged, objFastssz)
+	if diff != "" {
+		t.Fatalf("[DiffFuzz] Decoded object mismatch => (karalabe->bridged) vs fastssz\nDiff:\n%s", diff)
+		return false
+	}
+
+	// 4) Re-encode with fastssz (bridged vs direct)
+	outF1, err1 := marshalAsFastssz(bridged)
+	if err1 != nil {
+		t.Fatalf("[DiffFuzz] fail to re-encode bridged (fastssz): %v", err1)
+		return false
+	}
+	outF2, err2 := objFastssz.MarshalSSZ()
+	if err2 != nil {
+		t.Fatalf("[DiffFuzz] fastssz re-encode fail: %v", err2)
+		return false
+	}
+
+	// 5) Re-encode with fastssz
+	outF, err := objFastssz.MarshalSSZ()
+	if err != nil {
+		t.Fatalf("[DiffFuzz] fastssz re-encode fail: %v", err)
+		return false
+	}
+
+	// 6) Compare re-encoded bytes
+	if !bytes.Equal(outF1, outF2) {
+		prefix := commonPrefix(outF1, outF2)
+		t.Fatalf("[DiffFuzz] SSZ mismatch => bridged vs fastssz\n"+
+			"common prefix length: %d\n"+
+			"bridged-len=%d fastssz-len=%d\n"+
+			"bridged remainder: %X\n"+
+			"fastssz remainder:  %X",
+			len(prefix), len(outF1), len(outF2), outF1[len(prefix):], outF2[len(prefix):])
+		return false
+	}
+
+	return true
+}
+
+func marshalAsFastssz(v any) ([]byte, error) {
+	fsObj, ok := v.(fastssz.Object)
+	if !ok {
+		return nil, fmt.Errorf("marshalAsFastssz: not a fastssz.Object type => %T", v)
+	}
+	return fsObj.MarshalSSZ()
+}
+
+func BridgeKaralabeToFastssz(k any) (any, error) {
+	if k == nil {
+		return nil, nil
+	}
+	return bridgeValue(reflect.ValueOf(k))
+}
+
+func bridgeValue(v reflect.Value) (any, error) {
+	if !v.IsValid() {
+		return nil, nil
+	}
+
+	switch v.Kind() {
+	case reflect.Ptr:
+		if v.IsNil() {
+			return zeroForPointerType(v.Type()), nil
+		}
+		return bridgeValue(v.Elem())
+
+	case reflect.Uint8: // byte
+		return uint8(v.Uint()), nil
+
+	case reflect.Bool:
+		return v.Bool(), nil
+
+	case reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint, reflect.Int, reflect.Int32, reflect.Int64:
+		return v.Interface(), nil
+
+	case reflect.Struct:
+		if isUint256Type(v.Type()) {
+			iFace := v.Interface()
+			if x, ok := iFace.(*uint256.Int); ok {
+				return convertUint256ToByte32(x), nil
+			}
+			arr := convertUint256ToByte32(iFace.(*uint256.Int))
+			return arr, nil
+		}
+		return bridgeStruct(v)
+
+	case reflect.Slice:
+		return bridgeSlice(v)
+
+	case reflect.Array:
+		return bridgeArray(v)
+
+	default:
+		return v.Interface(), nil
+	}
+}
+
+func zeroForPointerType(ptrType reflect.Type) any {
+	elem := ptrType.Elem()
+	switch elem.Kind() {
+	case reflect.Bool:
+		return false
+	case reflect.Uint8:
+		return uint8(0)
+	case reflect.Uint16:
+		return uint16(0)
+	case reflect.Uint32:
+		return uint32(0)
+	case reflect.Uint64:
+		return uint64(0)
+	default:
+		return nil
+	}
+}
+
+func bridgeStruct(v reflect.Value) (any, error) {
+	outMap := make(map[string]any)
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		fName := t.Field(i).Name
+		fieldVal := v.Field(i)
+		bridged, err := bridgeValue(fieldVal)
+		if err != nil {
+			return nil, fmt.Errorf("struct field %s bridging error: %w", fName, err)
+		}
+		outMap[fName] = bridged
+	}
+	return outMap, nil
+}
+
+func bridgeSlice(v reflect.Value) (any, error) {
+	length := v.Len()
+	out := make([]any, 0, length)
+	for i := 0; i < length; i++ {
+		bridgedElem, err := bridgeValue(v.Index(i))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, bridgedElem)
+	}
+	return out, nil
+}
+
+func bridgeArray(v reflect.Value) (any, error) {
+	arrLen := v.Len()
+	elemType := v.Type().Elem()
+
+	if elemType.Kind() == reflect.Array {
+		out := make([]any, arrLen)
+		for i := 0; i < arrLen; i++ {
+			bridgedElem, err := bridgeArray(v.Index(i))
+			if err != nil {
+				return nil, err
+			}
+			out[i] = bridgedElem
+		}
+		return out, nil
+	}
+
+	out := make([]any, 0, arrLen)
+	for i := 0; i < arrLen; i++ {
+		bridgedElem, err := bridgeValue(v.Index(i))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, bridgedElem)
+	}
+	return out, nil
+}
+
+func isUint256Type(t reflect.Type) bool {
+	return (t.PkgPath() == "github.com/holiman/uint256" && t.Name() == "Int")
+}
+
+func convertUint256ToByte32(x *uint256.Int) [32]byte {
+	var out [32]byte
+	if x == nil {
+		return out
+	}
+	out = x.Bytes32()
+	return out
 }
