@@ -655,8 +655,8 @@ func newFastsszObject[T any]() (fastssz.Object, error) {
 	case "*types.SyncAggregate{}":
 		return &fastssz.SyncAggregate{}, nil
 
-	case "*types.SyncCommiteeBits{}":
-		return &fastssz.SyncCommiteeBits{}, nil
+	case "*types.SyncCommittee{}":
+		return &fastssz.SyncCommittee{}, nil
 
 	case "*types.ValidatorMonolith{}":
 		return &fastssz.ValidatorMonolith{}, nil
