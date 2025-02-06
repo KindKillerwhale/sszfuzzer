@@ -16,10 +16,13 @@ import (
 	"github.com/golang/snappy"
 	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
-	"github.com/karalabe/ssz"
+
+	fssz "github.com/ferranbt/fastssz"
+	kssz "github.com/karalabe/ssz"
 
 	// Ethereum consensus spec types (Attestation, BeaconBlock, etc.)
 	// types "github.com/karalabe/ssz/tests/testtypes/consensus-spec-tests"
+
 	fastssz "github.com/KindKillerwhale/sszfuzzer/types/fastssz"
 	types "github.com/KindKillerwhale/sszfuzzer/types/sszgen"
 )
@@ -46,7 +49,7 @@ func commonPrefix(a []byte, b []byte) []byte {
 // is specifically implemented on a struct pointer. That's needed to allow us
 // to instantiate new structs via `new` when parsing.
 type newableObject[U any] interface {
-	ssz.Object
+	kssz.Object
 	*U
 }
 
@@ -287,7 +290,7 @@ func collectValidCorpus[T newableObject[U], U any](f *testing.F, kind string, co
 			}
 
 			obj := T(new(U))
-			if err := ssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), ssz.ForkFuture); err == nil {
+			if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), kssz.ForkFuture); err == nil {
 				// Stash away all valid ssz streams so we can play with decoding
 				// into previously used objects
 				valids = append(valids, inSSZ)
@@ -307,7 +310,7 @@ func collectValidCorpus[T newableObject[U], U any](f *testing.F, kind string, co
 // decodeStreamRoundtrip tries decoding the SSZ bytes in streaming mode,
 // then re-encodes them in streaming mode again, compares, and returns true if they match.
 func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) bool {
-	if err := ssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
 		// decode false -> roundtrip impossible
 		return false
 	}
@@ -315,7 +318,7 @@ func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte
 	// Stream decoder succeeded, make sure it re-encodes correctly and
 	// that the buffer decoder also succeeds parsing
 	blob := new(bytes.Buffer)
-	if err := ssz.EncodeToStreamOnFork(blob, obj, ssz.ForkFuture); err != nil {
+	if err := kssz.EncodeToStreamOnFork(blob, obj, kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to re-encode stream: %v", err)
 	}
 
@@ -325,7 +328,7 @@ func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte
 			blob, inSSZ, len(prefix), blob.Bytes()[len(prefix):], inSSZ[len(prefix):])
 	}
 
-	if err := ssz.DecodeFromBytesOnFork(inSSZ, obj, ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to decode buffer: %v", err)
 	}
 	return true
@@ -335,14 +338,14 @@ func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte
 // then re-encodes them in buffer mode again, compares, and returns true if they match.
 func decodeBufferRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) bool {
 	// Try the buffer encoder/decoder
-	if err := ssz.DecodeFromBytesOnFork(inSSZ, obj, ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		return false
 	}
 
 	// Buffer decoder succeeded, make sure it re-encodes correctly and
 	// that the stream decoder also succeeds parsing
-	bin := make([]byte, ssz.SizeOnFork(obj, ssz.ForkFuture))
-	if err := ssz.EncodeToBytesOnFork(bin, obj, ssz.ForkFuture); err != nil {
+	bin := make([]byte, kssz.SizeOnFork(obj, kssz.ForkFuture))
+	if err := kssz.EncodeToBytesOnFork(bin, obj, kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to re-encode buffer: %v", err)
 	}
 
@@ -352,7 +355,7 @@ func decodeBufferRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte
 			bin, inSSZ, len(prefix), bin[len(prefix):], inSSZ[len(prefix):])
 	}
 
-	if err := ssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to decode stream: %v", err)
 	}
 	return true
@@ -361,14 +364,14 @@ func decodeBufferRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte
 // finalChecks verifies that concurrent vs sequential merkle root match,
 // and that size matches the input length, etc.
 func finalChecks[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) {
-	hashSeq := ssz.HashSequentialOnFork(obj, ssz.ForkFuture)
-	hashConc := ssz.HashConcurrentOnFork(obj, ssz.ForkFuture)
+	hashSeq := kssz.HashSequentialOnFork(obj, kssz.ForkFuture)
+	hashConc := kssz.HashConcurrentOnFork(obj, kssz.ForkFuture)
 
 	if hashSeq != hashConc {
 		t.Fatalf("sequential/concurrent hash mismatch: sequencial %x, concurrent %x", hashSeq, hashConc)
 	}
 
-	sz := ssz.SizeOnFork(obj, ssz.ForkFuture)
+	sz := kssz.SizeOnFork(obj, kssz.ForkFuture)
 	if sz != uint32(len(inSSZ)) {
 		t.Fatalf("reported/generated size mismatch: reported %v, generated %v", sz, len(inSSZ))
 	}
@@ -392,16 +395,16 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, vali
 		t.Errorf("===> ClearSSZ() not found on this type.")
 	}
 
-	if err := ssz.DecodeFromBytesOnFork(vSSZ, obj, ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(vSSZ, obj, kssz.ForkFuture); err != nil {
 		panic(err) // we've already decoded this, cannot fail
 	}
 
-	if err := ssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to decode stream into used object: %v", err)
 	}
 
 	blob := new(bytes.Buffer)
-	if err := ssz.EncodeToStreamOnFork(blob, obj, ssz.ForkFuture); err != nil {
+	if err := kssz.EncodeToStreamOnFork(blob, obj, kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to re-encode stream from used object: %v", err)
 	}
 
@@ -420,14 +423,14 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, vali
 		cl.ClearSSZ()
 	}
 
-	if err := ssz.DecodeFromBytesOnFork(vSSZ, obj, ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(vSSZ, obj, kssz.ForkFuture); err != nil {
 		panic(err) // we've already decoded this, cannot fail
 	}
-	if err := ssz.DecodeFromBytesOnFork(inSSZ, obj, ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to decode buffer into used object: %v", err)
 	}
-	bin := make([]byte, ssz.SizeOnFork(obj, ssz.ForkFuture))
-	if err := ssz.EncodeToBytesOnFork(bin, obj, ssz.ForkFuture); err != nil {
+	bin := make([]byte, kssz.SizeOnFork(obj, kssz.ForkFuture))
+	if err := kssz.EncodeToBytesOnFork(bin, obj, kssz.ForkFuture); err != nil {
 		t.Fatalf("failed to re-encode buffer from used object: %v", err)
 	}
 	if !bytes.Equal(bin, inSSZ) {
@@ -444,9 +447,9 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, vali
 
 // crossForkCheck : decode 'inSSZ' for all known forks => coverage
 func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) {
-	for forkName, forkVal := range ssz.ForkMapping {
+	for forkName, forkVal := range kssz.ForkMapping {
 		// skip unknown => or keep it if you want
-		if forkVal == ssz.ForkUnknown {
+		if forkVal == kssz.ForkUnknown {
 			continue
 		}
 
@@ -454,11 +457,11 @@ func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T
 			cl.ClearSSZ()
 		}
 
-		if err := ssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), forkVal); err == nil {
+		if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), forkVal); err == nil {
 			// success => re-encode just for coverage
-			sz2 := ssz.SizeOnFork(obj, forkVal)
+			sz2 := kssz.SizeOnFork(obj, forkVal)
 			out := make([]byte, sz2)
-			if err2 := ssz.EncodeToBytesOnFork(out, obj, forkVal); err2 == nil {
+			if err2 := kssz.EncodeToBytesOnFork(out, obj, forkVal); err2 == nil {
 				// t.Logf("[crossFork] fork=%s => decode+encode ok (size=%d)", forkName, sz2)
 				continue
 			} else {
@@ -470,7 +473,13 @@ func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T
 	}
 }
 
-func newFastsszObject[T any]() (fastssz.Object, error) {
+type Object interface {
+	fssz.Marshaler
+	fssz.Unmarshaler
+	fssz.HashRoot
+}
+
+func newFastsszObject[T any]() (Object, error) {
 	var zero T
 	rt := reflect.TypeOf(zero)
 
@@ -686,7 +695,7 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 		cl.ClearSSZ()
 	}
 
-	if err := ssz.DecodeFromBytesOnFork(inSSZ, objKaralabe, ssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(inSSZ, objKaralabe, kssz.ForkFuture); err != nil {
 		// If karalabe fails => no comparison
 		return false
 	}
@@ -729,14 +738,7 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 		return false
 	}
 
-	// 5) Re-encode with fastssz
-	outF, err := objFastssz.MarshalSSZ()
-	if err != nil {
-		t.Fatalf("[DiffFuzz] fastssz re-encode fail: %v", err)
-		return false
-	}
-
-	// 6) Compare re-encoded bytes
+	// 5) Compare re-encoded bytes
 	if !bytes.Equal(outF1, outF2) {
 		prefix := commonPrefix(outF1, outF2)
 		t.Fatalf("[DiffFuzz] SSZ mismatch => bridged vs fastssz\n"+
@@ -752,9 +754,9 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 }
 
 func marshalAsFastssz(v any) ([]byte, error) {
-	fsObj, ok := v.(fastssz.Object)
+	fsObj, ok := v.(Object)
 	if !ok {
-		return nil, fmt.Errorf("marshalAsFastssz: not a fastssz.Object type => %T", v)
+		return nil, fmt.Errorf("marshalAsFastssz: not a fastssz type => %T", v)
 	}
 	return fsObj.MarshalSSZ()
 }
