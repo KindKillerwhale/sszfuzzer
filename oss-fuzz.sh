@@ -61,12 +61,18 @@ function compile_fuzzer() {
     gofuzz-shim --func $function --package $package -f $file -o $fuzzer.a
     $CXX $CXXFLAGS $LIB_FUZZING_ENGINE $fuzzer.a -o ./$fuzzer
   fi
-
+  
   mkdir -p $outdir
 
   mv "$fuzzer" "$fuzzer.a" "$outdir" 2>/dev/null || true
   mv main*.go *.h *_fuzz.go "$outdir" 2>/dev/null || true
   cd -
+
+  corpusfile="$path/corpus/${fuzzer}_seed_corpus.zip"
+  if [ -f "$corpusfile" ]; then
+    cp "$corpusfile" "$outdir"
+    echo "Found seed corpus: $corpusfile"
+  fi
 
   echo "Built fuzzer => $outdir/$fuzzer"
 }

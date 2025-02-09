@@ -7,13 +7,9 @@ package consensus_fuzz
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
-	"github.com/golang/snappy"
 	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
 
@@ -25,13 +21,6 @@ import (
 
 	fastssz "github.com/KindKillerwhale/sszfuzzer/types/fastssz"
 	types "github.com/KindKillerwhale/sszfuzzer/types/sszgen"
-)
-
-var (
-	// consensusSpecTestsRoot is the folder where the consensus ssz tests are located.
-	// It depends on the path of the binary.
-	// Setting the path as a temporary measure
-	consensusSpecTestsRoot = filepath.Join("..", "..", "corpus", "consensus-spec-tests", "tests", "mainnet")
 )
 
 // commonPrefix returns the common prefix in two byte slices.
@@ -207,10 +196,7 @@ func FuzzConsensusSpecsWithdrawalVariation(f *testing.F) {
 }
 
 func fuzzConsensusSpecType[T newableObject[U], U any](f *testing.F, kind string) {
-	// 1) Collect corpus from fork directories
-	valids := collectValidCorpus[T, U](f, kind, consensusSpecTestsRoot)
-
-	// 2) Actual fuzz logic
+	// Fuzz logic
 	f.Fuzz(func(t *testing.T, inSSZ []byte) {
 		var valid bool
 
@@ -242,12 +228,13 @@ func fuzzConsensusSpecType[T newableObject[U], U any](f *testing.F, kind string)
 		}
 
 		// (c) If valid => do extra stateful/crossFork checks (handleValidCase)
-		if valid && len(valids) > 0 {
-			handleValidCase[T, U](t, inSSZ, valids)
+		if valid {
+			handleValidCase[T, U](t, inSSZ)
 		}
 	})
 }
 
+/*
 // collectValidCorpus enumerates each fork's ssz_random data,
 // decodes them with ForkFuture and returns a list of valid SSZ byte
 func collectValidCorpus[T newableObject[U], U any](f *testing.F, kind string, consensusSpecTestsRoot string) (valid [][]byte) {
@@ -306,6 +293,7 @@ func collectValidCorpus[T newableObject[U], U any](f *testing.F, kind string, co
 	}
 	return valids
 }
+*/
 
 // decodeStreamRoundtrip tries decoding the SSZ bytes in streaming mode,
 // then re-encodes them in streaming mode again, compares, and returns true if they match.
@@ -381,9 +369,7 @@ func finalChecks[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) {
 // handleValidCase (stateful leftover decode, crossForkCheck)
 // --------------------------------------------------------
 
-func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, valids [][]byte) {
-	// pick random from corpus
-	vSSZ := valids[rand.Intn(len(valids))]
+func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte) {
 
 	// Try the stream encoder/decoder into a prepped object
 	obj := T(new(U))
@@ -395,7 +381,7 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, vali
 		t.Errorf("===> ClearSSZ() not found on this type.")
 	}
 
-	if err := kssz.DecodeFromBytesOnFork(vSSZ, obj, kssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		panic(err) // we've already decoded this, cannot fail
 	}
 
@@ -423,7 +409,7 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte, vali
 		cl.ClearSSZ()
 	}
 
-	if err := kssz.DecodeFromBytesOnFork(vSSZ, obj, kssz.ForkFuture); err != nil {
+	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		panic(err) // we've already decoded this, cannot fail
 	}
 	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
