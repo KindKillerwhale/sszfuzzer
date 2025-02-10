@@ -469,208 +469,218 @@ func newFastsszObject[T any]() (Object, error) {
 	var zero T
 	rt := reflect.TypeOf(zero)
 
-	switch rt.String() {
-	case "*types.AggregateAndProof{}":
-		return &fastssz.AggregateAndProof{}, nil
-
-	case "*types.AttestationData{}":
-		return &fastssz.AttestationData{}, nil
-
-	case "*types.AttestationDataVariation1{}":
-		return &fastssz.AttestationDataVariation1{}, nil
-
-	case "*types.AttestationDataVariation2{}":
-		return &fastssz.AttestationDataVariation2{}, nil
-
-	case "*types.AttestationDataVariation3{}":
-		return &fastssz.AttestationDataVariation3{}, nil
-
-	case "*types.Attestation{}":
-		return &fastssz.Attestation{}, nil
-
-	case "*types.AttestationVariation1{}":
-		return &fastssz.AttestationVariation1{}, nil
-
-	case "*types.AttestationVariation2{}":
-		return &fastssz.AttestationVariation2{}, nil
-
-	case "*types.AttestationVariation3{}":
-		return &fastssz.AttestationVariation3{}, nil
-
-	case "*types.AttesterSlashing{}":
-		return &fastssz.AttesterSlashing{}, nil
-
-	case "*types.BeaconBlockBodyAltair{}":
-		return &fastssz.BeaconBlockBodyAltair{}, nil
-
-	case "*types.BeaconBlockBodyBellatrix{}":
-		return &fastssz.BeaconBlockBodyBellatrix{}, nil
-
-	case "*types.BeaconBlockBodyCapella{}":
-		return &fastssz.BeaconBlockBodyCapella{}, nil
-
-	case "*types.BeaconBlockBodyDeneb{}":
-		return &fastssz.BeaconBlockBodyDeneb{}, nil
-
-	case "*types.BeaconBlockBodyMonolith{}":
-		return &fastssz.BeaconBlockBodyMonolith{}, nil
-
-	case "*types.BeaconBlockBody{}":
-		return &fastssz.BeaconBlockBody{}, nil
-
-	case "*types.BeaconBlockHeader{}":
-		return &fastssz.BeaconBlockHeader{}, nil
-
-	case "*types.BeaconBlock{}":
-		return &fastssz.BeaconBlock{}, nil
-
-	case "*types.BeaconStateAltair{}":
-		return &fastssz.BeaconStateAltair{}, nil
-
-	case "*types.BeaconStateBellatrix{}":
-		return &fastssz.BeaconStateBellatrix{}, nil
-
-	case "*types.BeaconStateCapella{}":
-		return &fastssz.BeaconStateCapella{}, nil
-
-	case "*types.BeaconStateDeneb{}":
-		return &fastssz.BeaconStateDeneb{}, nil
-
-	case "*types.BeaconStateMonolith{}":
-		return &fastssz.BeaconStateMonolith{}, nil
-
-	case "*types.BeaconState{}":
-		return &fastssz.BeaconState{}, nil
-
-	case "*types.BitsStructMonolith{}":
-		return &fastssz.BitsStructMonolith{}, nil
-
-	case "*types.BitsStruct{}":
-		return &fastssz.BitsStruct{}, nil
-
-	case "*types.BLSToExecutionChange{}":
-		return &fastssz.BLSToExecutionChange{}, nil
-
-	case "*types.Checkpoint{}":
-		return &fastssz.Checkpoint{}, nil
-
-	case "*types.DepositData{}":
-		return &fastssz.DepositData{}, nil
-
-	case "*types.DepositMessage{}":
-		return &fastssz.DepositMessage{}, nil
-
-	case "*types.Deposit{}":
-		return &fastssz.Deposit{}, nil
-
-	case "*types.Eth1Block{}":
-		return &fastssz.Eth1Block{}, nil
-
-	case "*types.Eth1Data{}":
-		return &fastssz.Eth1Data{}, nil
-
-	case "*types.ExecutionPayloadCapella{}":
-		return &fastssz.ExecutionPayloadCapella{}, nil
-
-	case "*types.ExecutionPayloadDeneb{}":
-		return &fastssz.ExecutionPayloadDeneb{}, nil
-
-	case "*types.ExecutionPayloadHeaderCapella{}":
-		return &fastssz.ExecutionPayloadHeaderCapella{}, nil
-
-	case "*types.ExecutionPayloadHeaderDeneb{}":
-		return &fastssz.ExecutionPayloadHeaderDeneb{}, nil
-
-	case "*types.ExecutionPayloadHeaderMonolith{}":
-		return &fastssz.ExecutionPayloadHeaderMonolith{}, nil
-
-	case "*types.ExecutionPayloadHeader{}":
-		return &fastssz.ExecutionPayloadHeader{}, nil
-
-	case "*types.ExecutionPayloadMonolith2{}":
-		return &fastssz.ExecutionPayloadMonolith2{}, nil
-
-	case "*types.ExecutionPayloadMonolith{}":
-		return &fastssz.ExecutionPayloadMonolith{}, nil
-
-	case "*types.ExecutionPayload{}":
-		return &fastssz.ExecutionPayload{}, nil
-
-	case "*types.ExecutionPayloadVariation{}":
-		return &fastssz.ExecutionPayloadVariation{}, nil
-
-	case "*types.FixedTestStructMonolith{}":
-		return &fastssz.FixedTestStructMonolith{}, nil
-
-	case "*types.FixedTestStruct{}":
-		return &fastssz.FixedTestStruct{}, nil
-
-	case "*types.Fork{}":
-		return &fastssz.Fork{}, nil
-
-	case "*types.HistoricalBatch{}":
-		return &fastssz.HistoricalBatch{}, nil
-
-	case "*types.HistoricalBatchVariation{}":
-		return &fastssz.HistoricalBatchVariation{}, nil
-
-	case "*types.HistoricalSummary{}":
-		return &fastssz.HistoricalSummary{}, nil
-
-	case "*types.IndexedAttestation{}":
-		return &fastssz.IndexedAttestation{}, nil
-
-	case "*types.PendingAttestation{}":
-		return &fastssz.PendingAttestation{}, nil
-
-	case "*types.ProposerSlashing{}":
-		return &fastssz.ProposerSlashing{}, nil
-
-	case "*types.SignedBeaconBlockHeader{}":
-		return &fastssz.SignedBeaconBlockHeader{}, nil
-
-	case "*types.SignedBLSToExecutionChange{}":
-		return &fastssz.SignedBLSToExecutionChange{}, nil
-
-	case "*types.SignedVoluntaryExit{}":
-		return &fastssz.SignedVoluntaryExit{}, nil
-
-	case "*types.SingleFieldTestStructMonolith{}":
-		return &fastssz.SingleFieldTestStructMonolith{}, nil
-
-	case "*types.SingleFieldTestStruct{}":
-		return &fastssz.SingleFieldTestStruct{}, nil
-
-	case "*types.SmallTestStructMonolith{}":
-		return &fastssz.SmallTestStructMonolith{}, nil
-
-	case "*types.SmallTestStruct{}":
-		return &fastssz.SmallTestStruct{}, nil
-
-	case "*types.SyncAggregate{}":
-		return &fastssz.SyncAggregate{}, nil
-
-	case "*types.SyncCommittee{}":
-		return &fastssz.SyncCommittee{}, nil
-
-	case "*types.ValidatorMonolith{}":
-		return &fastssz.ValidatorMonolith{}, nil
-
-	case "*types.Validator{}":
-		return &fastssz.Validator{}, nil
-
-	case "*types.VoluntaryExit{}":
-		return &fastssz.VoluntaryExit{}, nil
-
-	case "*types.Withdrawal{}":
-		return &fastssz.Withdrawal{}, nil
-
-	case "*types.WithdrawalVariation{}":
-		return &fastssz.WithdrawalVariation{}, nil
-
-	default:
-		return nil, fmt.Errorf("unmapped T => %s", rt.String())
+	if rt.Kind() == reflect.Ptr {
+		rt = rt.Elem()
 	}
+
+	pkgPath := rt.PkgPath()
+	typeName := rt.Name()
+
+	if pkgPath == "github.com/KindKillerwhale/sszfuzzer/types/sszgen" {
+		switch typeName {
+		case "AggregateAndProof":
+			return &fastssz.AggregateAndProof{}, nil
+
+		case "AttestationData":
+			return &fastssz.AttestationData{}, nil
+
+		case "AttestationDataVariation1":
+			return &fastssz.AttestationDataVariation1{}, nil
+
+		case "AttestationDataVariation2":
+			return &fastssz.AttestationDataVariation2{}, nil
+
+		case "AttestationDataVariation3":
+			return &fastssz.AttestationDataVariation3{}, nil
+
+		case "Attestation":
+			return &fastssz.Attestation{}, nil
+
+		case "AttestationVariation1":
+			return &fastssz.AttestationVariation1{}, nil
+
+		case "AttestationVariation2":
+			return &fastssz.AttestationVariation2{}, nil
+
+		case "AttestationVariation3":
+			return &fastssz.AttestationVariation3{}, nil
+
+		case "AttesterSlashing":
+			return &fastssz.AttesterSlashing{}, nil
+
+		case "BeaconBlockBodyAltair":
+			return &fastssz.BeaconBlockBodyAltair{}, nil
+
+		case "BeaconBlockBodyBellatrix":
+			return &fastssz.BeaconBlockBodyBellatrix{}, nil
+
+		case "BeaconBlockBodyCapella":
+			return &fastssz.BeaconBlockBodyCapella{}, nil
+
+		case "BeaconBlockBodyDeneb":
+			return &fastssz.BeaconBlockBodyDeneb{}, nil
+
+		case "BeaconBlockBodyMonolith":
+			return &fastssz.BeaconBlockBodyMonolith{}, nil
+
+		case "BeaconBlockBody":
+			return &fastssz.BeaconBlockBody{}, nil
+
+		case "BeaconBlockHeader":
+			return &fastssz.BeaconBlockHeader{}, nil
+
+		case "BeaconBlock":
+			return &fastssz.BeaconBlock{}, nil
+
+		case "BeaconStateAltair":
+			return &fastssz.BeaconStateAltair{}, nil
+
+		case "BeaconStateBellatrix":
+			return &fastssz.BeaconStateBellatrix{}, nil
+
+		case "BeaconStateCapella":
+			return &fastssz.BeaconStateCapella{}, nil
+
+		case "BeaconStateDeneb":
+			return &fastssz.BeaconStateDeneb{}, nil
+
+		case "BeaconStateMonolith":
+			return &fastssz.BeaconStateMonolith{}, nil
+
+		case "BeaconState":
+			return &fastssz.BeaconState{}, nil
+
+		case "BitsStructMonolith":
+			return &fastssz.BitsStructMonolith{}, nil
+
+		case "BitsStruct":
+			return &fastssz.BitsStruct{}, nil
+
+		case "BLSToExecutionChange":
+			return &fastssz.BLSToExecutionChange{}, nil
+
+		case "Checkpoint":
+			return &fastssz.Checkpoint{}, nil
+
+		case "DepositData":
+			return &fastssz.DepositData{}, nil
+
+		case "DepositMessage":
+			return &fastssz.DepositMessage{}, nil
+
+		case "Deposit":
+			return &fastssz.Deposit{}, nil
+
+		case "Eth1Block":
+			return &fastssz.Eth1Block{}, nil
+
+		case "Eth1Data":
+			return &fastssz.Eth1Data{}, nil
+
+		case "ExecutionPayloadCapella":
+			return &fastssz.ExecutionPayloadCapella{}, nil
+
+		case "ExecutionPayloadDeneb":
+			return &fastssz.ExecutionPayloadDeneb{}, nil
+
+		case "ExecutionPayloadHeaderCapella":
+			return &fastssz.ExecutionPayloadHeaderCapella{}, nil
+
+		case "ExecutionPayloadHeaderDeneb":
+			return &fastssz.ExecutionPayloadHeaderDeneb{}, nil
+
+		case "ExecutionPayloadHeaderMonolith":
+			return &fastssz.ExecutionPayloadHeaderMonolith{}, nil
+
+		case "ExecutionPayloadHeader":
+			return &fastssz.ExecutionPayloadHeader{}, nil
+
+		case "ExecutionPayloadMonolith2":
+			return &fastssz.ExecutionPayloadMonolith2{}, nil
+
+		case "ExecutionPayloadMonolith":
+			return &fastssz.ExecutionPayloadMonolith{}, nil
+
+		case "ExecutionPayload":
+			return &fastssz.ExecutionPayload{}, nil
+
+		case "ExecutionPayloadVariation":
+			return &fastssz.ExecutionPayloadVariation{}, nil
+
+		case "FixedTestStructMonolith":
+			return &fastssz.FixedTestStructMonolith{}, nil
+
+		case "FixedTestStruct":
+			return &fastssz.FixedTestStruct{}, nil
+
+		case "Fork":
+			return &fastssz.Fork{}, nil
+
+		case "HistoricalBatch":
+			return &fastssz.HistoricalBatch{}, nil
+
+		case "HistoricalBatchVariation":
+			return &fastssz.HistoricalBatchVariation{}, nil
+
+		case "HistoricalSummary":
+			return &fastssz.HistoricalSummary{}, nil
+
+		case "IndexedAttestation":
+			return &fastssz.IndexedAttestation{}, nil
+
+		case "PendingAttestation":
+			return &fastssz.PendingAttestation{}, nil
+
+		case "ProposerSlashing":
+			return &fastssz.ProposerSlashing{}, nil
+
+		case "SignedBeaconBlockHeader":
+			return &fastssz.SignedBeaconBlockHeader{}, nil
+
+		case "SignedBLSToExecutionChange":
+			return &fastssz.SignedBLSToExecutionChange{}, nil
+
+		case "SignedVoluntaryExit":
+			return &fastssz.SignedVoluntaryExit{}, nil
+
+		case "SingleFieldTestStructMonolith":
+			return &fastssz.SingleFieldTestStructMonolith{}, nil
+
+		case "SingleFieldTestStruct":
+			return &fastssz.SingleFieldTestStruct{}, nil
+
+		case "SmallTestStructMonolith":
+			return &fastssz.SmallTestStructMonolith{}, nil
+
+		case "SmallTestStruct":
+			return &fastssz.SmallTestStruct{}, nil
+
+		case "SyncAggregate":
+			return &fastssz.SyncAggregate{}, nil
+
+		case "SyncCommittee":
+			return &fastssz.SyncCommittee{}, nil
+
+		case "ValidatorMonolith":
+			return &fastssz.ValidatorMonolith{}, nil
+
+		case "Validator":
+			return &fastssz.Validator{}, nil
+
+		case "VoluntaryExit":
+			return &fastssz.VoluntaryExit{}, nil
+
+		case "Withdrawal":
+			return &fastssz.Withdrawal{}, nil
+
+		case "WithdrawalVariation":
+			return &fastssz.WithdrawalVariation{}, nil
+
+		default:
+			return nil, fmt.Errorf("unmapped T => %s.%s", pkgPath, typeName)
+		}
+	}
+	return nil, fmt.Errorf("unmapped T => %s.%s", pkgPath, typeName)
 }
 
 func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []byte) bool {
@@ -683,25 +693,26 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 
 	if err := kssz.DecodeFromBytesOnFork(inSSZ, objKaralabe, kssz.ForkFuture); err != nil {
 		// If karalabe fails => no comparison
+		t.Logf("[DiffFuzz] karalabe/ssz decode fail: %v\n", err)
 		return false
 	}
 
 	// 2) Decode with fastssz
 	objFastssz, err := newFastsszObject[T]()
 	if err != nil {
-		t.Logf("[DiffFuzz] no fastssz mapping for %T => skip: %v", objKaralabe, err)
+		t.Logf("[DiffFuzz] no fastssz mapping for %T => skip: %v\n", objKaralabe, err)
 		return false
 	}
 
 	if err := objFastssz.UnmarshalSSZ(inSSZ); err != nil {
-		t.Logf("[DiffFuzz] fastssz decode fail: %v", err)
+		t.Logf("[DiffFuzz] fastssz decode fail: %v\n", err)
 		return false
 	}
 
 	// 3) karalabe -> fastssz Bridging
 	bridged, err := BridgeKaralabeToFastssz(objKaralabe)
 	if err != nil {
-		t.Fatalf("[DiffFuzz] bridging karalabe->fastssz error: %v", err)
+		t.Fatalf("[DiffFuzz] bridging karalabe->fastssz error: %v\n", err)
 		return false
 	}
 
