@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -459,228 +460,122 @@ func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T
 	}
 }
 
+// Object is the interface implented by fastssz types.
 type Object interface {
 	fssz.Marshaler
 	fssz.Unmarshaler
 	fssz.HashRoot
 }
 
-func newFastsszObject[T any]() (Object, error) {
-	var zero T
-	rt := reflect.TypeOf(zero)
+// cache for bridged objects
+var bridgedCache sync.Map // map[uintptr]any
 
+func BridgeKaralabeToFastssz(k any) (any, error) {
+	if k == nil {
+		return nil, nil
+	}
+	rv := reflect.ValueOf(k)
+	// cache key is the pointer value
+	if rv.Kind() != reflect.Ptr {
+		if rv.CanAddr() {
+			rv = rv.Addr()
+		} else {
+			// not addressable => return directly
+			fmt.Printf("BridgeKaralabeToFastssz: not addressable => return directly\n")
+			return bridgeValue(rv)
+		}
+	}
+	key := rv.Pointer()
+	if cached, ok := bridgedCache.Load(key); ok {
+		return cached, nil
+	}
+
+	result, err := bridgeValue(rv)
+	if err != nil {
+		return nil, err
+	}
+
+	bridgedCache.Store(key, result)
+	return result, nil
+}
+
+type fastsszFactoryFunc func() Object
+
+const basePackage = "github.com/KindKillerwhale/sszfuzzer/types/sszgen"
+
+var fastsszFactoryMapping = map[string]fastsszFactoryFunc{
+	"AggregateAndProof":              func() Object { return &fastssz.AggregateAndProof{} },
+	"Attestation":                    func() Object { return &fastssz.Attestation{} },
+	"AttestationData":                func() Object { return &fastssz.AttestationData{} },
+	"AttesterSlashing":               func() Object { return &fastssz.AttesterSlashing{} },
+	"BeaconBlock":                    func() Object { return &fastssz.BeaconBlock{} },
+	"BeaconBlockBody":                func() Object { return &fastssz.BeaconBlockBody{} },
+	"BeaconBlockBodyAltair":          func() Object { return &fastssz.BeaconBlockBodyAltair{} },
+	"BeaconBlockBodyBellatrix":       func() Object { return &fastssz.BeaconBlockBodyBellatrix{} },
+	"BeaconBlockBodyCapella":         func() Object { return &fastssz.BeaconBlockBodyCapella{} },
+	"BeaconBlockBodyDeneb":           func() Object { return &fastssz.BeaconBlockBodyDeneb{} },
+	"BeaconBlockBodyMonolith":        func() Object { return &fastssz.BeaconBlockBodyMonolith{} },
+	"BeaconBlockHeader":              func() Object { return &fastssz.BeaconBlockHeader{} },
+	"BeaconState":                    func() Object { return &fastssz.BeaconState{} },
+	"BeaconStateAltair":              func() Object { return &fastssz.BeaconStateAltair{} },
+	"BeaconStateBellatrix":           func() Object { return &fastssz.BeaconStateBellatrix{} },
+	"BeaconStateCapella":             func() Object { return &fastssz.BeaconStateCapella{} },
+	"BeaconStateDeneb":               func() Object { return &fastssz.BeaconStateDeneb{} },
+	"BeaconStateMonolith":            func() Object { return &fastssz.BeaconStateMonolith{} },
+	"BLSToExecutionChange":           func() Object { return &fastssz.BLSToExecutionChange{} },
+	"Checkpoint":                     func() Object { return &fastssz.Checkpoint{} },
+	"Deposit":                        func() Object { return &fastssz.Deposit{} },
+	"DepositData":                    func() Object { return &fastssz.DepositData{} },
+	"DepositMessage":                 func() Object { return &fastssz.DepositMessage{} },
+	"Eth1Block":                      func() Object { return &fastssz.Eth1Block{} },
+	"Eth1Data":                       func() Object { return &fastssz.Eth1Data{} },
+	"ExecutionPayload":               func() Object { return &fastssz.ExecutionPayload{} },
+	"ExecutionPayloadCapella":        func() Object { return &fastssz.ExecutionPayloadCapella{} },
+	"ExecutionPayloadDeneb":          func() Object { return &fastssz.ExecutionPayloadDeneb{} },
+	"ExecutionPayloadHeader":         func() Object { return &fastssz.ExecutionPayloadHeader{} },
+	"ExecutionPayloadHeaderCapella":  func() Object { return &fastssz.ExecutionPayloadHeaderCapella{} },
+	"ExecutionPayloadHeaderDeneb":    func() Object { return &fastssz.ExecutionPayloadHeaderDeneb{} },
+	"ExecutionPayloadHeaderMonolith": func() Object { return &fastssz.ExecutionPayloadHeaderMonolith{} },
+	"ExecutionPayloadMonolith":       func() Object { return &fastssz.ExecutionPayloadMonolith{} },
+	"ExecutionPayloadVariation":      func() Object { return &fastssz.ExecutionPayloadVariation{} },
+	"Fork":                           func() Object { return &fastssz.Fork{} },
+	"HistoricalBatch":                func() Object { return &fastssz.HistoricalBatch{} },
+	"HistoricalBatchVariation":       func() Object { return &fastssz.HistoricalBatchVariation{} },
+	"HistoricalSummary":              func() Object { return &fastssz.HistoricalSummary{} },
+	"IndexedAttestation":             func() Object { return &fastssz.IndexedAttestation{} },
+	"PendingAttestation":             func() Object { return &fastssz.PendingAttestation{} },
+	"ProposerSlashing":               func() Object { return &fastssz.ProposerSlashing{} },
+	"SignedBeaconBlockHeader":        func() Object { return &fastssz.SignedBeaconBlockHeader{} },
+	"SignedBLSToExecutionChange":     func() Object { return &fastssz.SignedBLSToExecutionChange{} },
+	"SignedVoluntaryExit":            func() Object { return &fastssz.SignedVoluntaryExit{} },
+	"SyncAggregate":                  func() Object { return &fastssz.SyncAggregate{} },
+	"SyncCommittee":                  func() Object { return &fastssz.SyncCommittee{} },
+	"Validator":                      func() Object { return &fastssz.Validator{} },
+	"VoluntaryExit":                  func() Object { return &fastssz.VoluntaryExit{} },
+	"Withdrawal":                     func() Object { return &fastssz.Withdrawal{} },
+	"WithdrawalVariation":            func() Object { return &fastssz.WithdrawalVariation{} },
+}
+
+func newFastsszObjectByType(rt reflect.Type) (Object, error) {
 	if rt.Kind() == reflect.Ptr {
 		rt = rt.Elem()
 	}
-
-	pkgPath := rt.PkgPath()
-	typeName := rt.Name()
-
-	if pkgPath == "github.com/KindKillerwhale/sszfuzzer/types/sszgen" {
-		switch typeName {
-		case "AggregateAndProof":
-			return &fastssz.AggregateAndProof{}, nil
-
-		case "AttestationData":
-			return &fastssz.AttestationData{}, nil
-
-		case "AttestationDataVariation1":
-			return &fastssz.AttestationDataVariation1{}, nil
-
-		case "AttestationDataVariation2":
-			return &fastssz.AttestationDataVariation2{}, nil
-
-		case "AttestationDataVariation3":
-			return &fastssz.AttestationDataVariation3{}, nil
-
-		case "Attestation":
-			return &fastssz.Attestation{}, nil
-
-		case "AttestationVariation1":
-			return &fastssz.AttestationVariation1{}, nil
-
-		case "AttestationVariation2":
-			return &fastssz.AttestationVariation2{}, nil
-
-		case "AttestationVariation3":
-			return &fastssz.AttestationVariation3{}, nil
-
-		case "AttesterSlashing":
-			return &fastssz.AttesterSlashing{}, nil
-
-		case "BeaconBlockBodyAltair":
-			return &fastssz.BeaconBlockBodyAltair{}, nil
-
-		case "BeaconBlockBodyBellatrix":
-			return &fastssz.BeaconBlockBodyBellatrix{}, nil
-
-		case "BeaconBlockBodyCapella":
-			return &fastssz.BeaconBlockBodyCapella{}, nil
-
-		case "BeaconBlockBodyDeneb":
-			return &fastssz.BeaconBlockBodyDeneb{}, nil
-
-		case "BeaconBlockBodyMonolith":
-			return &fastssz.BeaconBlockBodyMonolith{}, nil
-
-		case "BeaconBlockBody":
-			return &fastssz.BeaconBlockBody{}, nil
-
-		case "BeaconBlockHeader":
-			return &fastssz.BeaconBlockHeader{}, nil
-
-		case "BeaconBlock":
-			return &fastssz.BeaconBlock{}, nil
-
-		case "BeaconStateAltair":
-			return &fastssz.BeaconStateAltair{}, nil
-
-		case "BeaconStateBellatrix":
-			return &fastssz.BeaconStateBellatrix{}, nil
-
-		case "BeaconStateCapella":
-			return &fastssz.BeaconStateCapella{}, nil
-
-		case "BeaconStateDeneb":
-			return &fastssz.BeaconStateDeneb{}, nil
-
-		case "BeaconStateMonolith":
-			return &fastssz.BeaconStateMonolith{}, nil
-
-		case "BeaconState":
-			return &fastssz.BeaconState{}, nil
-
-		case "BitsStructMonolith":
-			return &fastssz.BitsStructMonolith{}, nil
-
-		case "BitsStruct":
-			return &fastssz.BitsStruct{}, nil
-
-		case "BLSToExecutionChange":
-			return &fastssz.BLSToExecutionChange{}, nil
-
-		case "Checkpoint":
-			return &fastssz.Checkpoint{}, nil
-
-		case "DepositData":
-			return &fastssz.DepositData{}, nil
-
-		case "DepositMessage":
-			return &fastssz.DepositMessage{}, nil
-
-		case "Deposit":
-			return &fastssz.Deposit{}, nil
-
-		case "Eth1Block":
-			return &fastssz.Eth1Block{}, nil
-
-		case "Eth1Data":
-			return &fastssz.Eth1Data{}, nil
-
-		case "ExecutionPayloadCapella":
-			return &fastssz.ExecutionPayloadCapella{}, nil
-
-		case "ExecutionPayloadDeneb":
-			return &fastssz.ExecutionPayloadDeneb{}, nil
-
-		case "ExecutionPayloadHeaderCapella":
-			return &fastssz.ExecutionPayloadHeaderCapella{}, nil
-
-		case "ExecutionPayloadHeaderDeneb":
-			return &fastssz.ExecutionPayloadHeaderDeneb{}, nil
-
-		case "ExecutionPayloadHeaderMonolith":
-			return &fastssz.ExecutionPayloadHeaderMonolith{}, nil
-
-		case "ExecutionPayloadHeader":
-			return &fastssz.ExecutionPayloadHeader{}, nil
-
-		case "ExecutionPayloadMonolith2":
-			return &fastssz.ExecutionPayloadMonolith2{}, nil
-
-		case "ExecutionPayloadMonolith":
-			return &fastssz.ExecutionPayloadMonolith{}, nil
-
-		case "ExecutionPayload":
-			return &fastssz.ExecutionPayload{}, nil
-
-		case "ExecutionPayloadVariation":
-			return &fastssz.ExecutionPayloadVariation{}, nil
-
-		case "FixedTestStructMonolith":
-			return &fastssz.FixedTestStructMonolith{}, nil
-
-		case "FixedTestStruct":
-			return &fastssz.FixedTestStruct{}, nil
-
-		case "Fork":
-			return &fastssz.Fork{}, nil
-
-		case "HistoricalBatch":
-			return &fastssz.HistoricalBatch{}, nil
-
-		case "HistoricalBatchVariation":
-			return &fastssz.HistoricalBatchVariation{}, nil
-
-		case "HistoricalSummary":
-			return &fastssz.HistoricalSummary{}, nil
-
-		case "IndexedAttestation":
-			return &fastssz.IndexedAttestation{}, nil
-
-		case "PendingAttestation":
-			return &fastssz.PendingAttestation{}, nil
-
-		case "ProposerSlashing":
-			return &fastssz.ProposerSlashing{}, nil
-
-		case "SignedBeaconBlockHeader":
-			return &fastssz.SignedBeaconBlockHeader{}, nil
-
-		case "SignedBLSToExecutionChange":
-			return &fastssz.SignedBLSToExecutionChange{}, nil
-
-		case "SignedVoluntaryExit":
-			return &fastssz.SignedVoluntaryExit{}, nil
-
-		case "SingleFieldTestStructMonolith":
-			return &fastssz.SingleFieldTestStructMonolith{}, nil
-
-		case "SingleFieldTestStruct":
-			return &fastssz.SingleFieldTestStruct{}, nil
-
-		case "SmallTestStructMonolith":
-			return &fastssz.SmallTestStructMonolith{}, nil
-
-		case "SmallTestStruct":
-			return &fastssz.SmallTestStruct{}, nil
-
-		case "SyncAggregate":
-			return &fastssz.SyncAggregate{}, nil
-
-		case "SyncCommittee":
-			return &fastssz.SyncCommittee{}, nil
-
-		case "ValidatorMonolith":
-			return &fastssz.ValidatorMonolith{}, nil
-
-		case "Validator":
-			return &fastssz.Validator{}, nil
-
-		case "VoluntaryExit":
-			return &fastssz.VoluntaryExit{}, nil
-
-		case "Withdrawal":
-			return &fastssz.Withdrawal{}, nil
-
-		case "WithdrawalVariation":
-			return &fastssz.WithdrawalVariation{}, nil
-
-		default:
-			return nil, fmt.Errorf("unmapped T => %s.%s", pkgPath, typeName)
-		}
+	if rt.PkgPath() != basePackage {
+		return nil, fmt.Errorf("unsupported package: %s", rt.PkgPath())
 	}
-	return nil, fmt.Errorf("unmapped T => %s.%s", pkgPath, typeName)
+	if factory, ok := fastsszFactoryMapping[rt.Name()]; ok {
+		return factory(), nil
+	}
+	return nil, fmt.Errorf("unmapped type: %s", rt.Name())
+}
+
+func newFastsszObject[T any]() (Object, error) {
+	var zero T
+	return newFastsszObjectByType(reflect.TypeOf(zero))
+}
+
+func newFastsszObjectFromKaralabeType(typ reflect.Type) (Object, error) {
+	return newFastsszObjectByType(typ)
 }
 
 func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []byte) bool {
@@ -758,13 +653,6 @@ func marshalAsFastssz(v any) ([]byte, error) {
 	return fsObj.MarshalSSZ()
 }
 
-func BridgeKaralabeToFastssz(k any) (any, error) {
-	if k == nil {
-		return nil, nil
-	}
-	return bridgeValue(reflect.ValueOf(k))
-}
-
 func bridgeValue(v reflect.Value) (any, error) {
 	if !v.IsValid() {
 		return nil, nil
@@ -788,14 +676,24 @@ func bridgeValue(v reflect.Value) (any, error) {
 
 	case reflect.Struct:
 		if isUint256Type(v.Type()) {
-			iFace := v.Interface()
-			if x, ok := iFace.(*uint256.Int); ok {
-				return convertUint256ToByte32(x), nil
+			var uint256Val *uint256.Int
+			if v.Type().Kind() != reflect.Ptr && v.CanAddr() {
+				var ok bool
+				uint256Val, ok = v.Addr().Interface().(*uint256.Int)
+				if !ok {
+					return nil, fmt.Errorf("failed to assert address of type %s to *uint256.Int", v.Type())
+				}
+			} else {
+				var ok bool
+				uint256Val, ok = v.Interface().(*uint256.Int)
+				if !ok {
+					return nil, fmt.Errorf("failed to assert value of type %s to *uint256.Int", v.Type())
+				}
 			}
-			arr := convertUint256ToByte32(iFace.(*uint256.Int))
-			return arr, nil
+			return convertUint256ToByte32(uint256Val), nil
 		}
-		return bridgeStruct(v)
+
+		return bridgeStructValue(v)
 
 	case reflect.Slice:
 		return bridgeSlice(v)
@@ -826,59 +724,103 @@ func zeroForPointerType(ptrType reflect.Type) any {
 	}
 }
 
-func bridgeStruct(v reflect.Value) (any, error) {
-	outMap := make(map[string]any)
+func bridgeStructValue(v reflect.Value) (any, error) {
+	fastObj, err := newFastsszObjectFromKaralabeType(v.Type())
+	if err != nil {
+		return nil, err
+	}
+	fastVal := reflect.ValueOf(fastObj).Elem()
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {
-		fName := t.Field(i).Name
-		fieldVal := v.Field(i)
-		bridged, err := bridgeValue(fieldVal)
-		if err != nil {
-			return nil, fmt.Errorf("struct field %s bridging error: %w", fName, err)
+		fieldName := t.Field(i).Name
+		karField := v.Field(i)
+		fastField := fastVal.FieldByName(fieldName)
+
+		if !fastField.IsValid() {
+			return nil, fmt.Errorf("field %s not found in fastssz type", fieldName)
 		}
-		outMap[fName] = bridged
+
+		converted, err := bridgeValue(karField)
+		if err != nil {
+			return nil, fmt.Errorf("error bridging field %s: %w", fieldName, err)
+		}
+
+		if reflect.TypeOf(converted) != fastField.Type() {
+			if reflect.ValueOf(converted).Type().ConvertibleTo(fastField.Type()) {
+				converted = reflect.ValueOf(converted).Convert(fastField.Type()).Interface()
+			} else {
+				return nil, fmt.Errorf("cannot convert field %s from %T to %s", fieldName, converted, fastField.Type())
+			}
+		}
+		fastField.Set(reflect.ValueOf(converted))
 	}
-	return outMap, nil
+	return fastObj, nil
 }
 
 func bridgeSlice(v reflect.Value) (any, error) {
-	length := v.Len()
-	out := make([]any, 0, length)
-	for i := 0; i < length; i++ {
-		bridgedElem, err := bridgeValue(v.Index(i))
+	n := v.Len()
+
+	bridgedElems := make([]reflect.Value, n)
+	for i := 0; i < n; i++ {
+		bridged, err := bridgeValue(v.Index(i))
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, bridgedElem)
+		bridgedElems[i] = reflect.ValueOf(bridged)
 	}
-	return out, nil
+
+	var elemType reflect.Type
+	if n > 0 {
+		elemType = bridgedElems[0].Type()
+	} else {
+
+		elemType = v.Type().Elem()
+	}
+
+	outSliceType := reflect.SliceOf(elemType)
+	outSliceVal := reflect.MakeSlice(outSliceType, 0, n)
+	for _, bv := range bridgedElems {
+		if !bv.Type().ConvertibleTo(elemType) {
+			return nil, fmt.Errorf("slice element type mismatch: %v not convertible to %v",
+				bv.Type(), elemType)
+		}
+		outSliceVal = reflect.Append(outSliceVal, bv.Convert(elemType))
+	}
+
+	return outSliceVal.Interface(), nil
 }
 
 func bridgeArray(v reflect.Value) (any, error) {
 	arrLen := v.Len()
 	elemType := v.Type().Elem()
 
-	if elemType.Kind() == reflect.Array {
-		out := make([]any, arrLen)
-		for i := 0; i < arrLen; i++ {
-			bridgedElem, err := bridgeArray(v.Index(i))
-			if err != nil {
-				return nil, err
-			}
-			out[i] = bridgedElem
-		}
-		return out, nil
-	}
-
-	out := make([]any, 0, arrLen)
+	bridgedElems := make([]reflect.Value, arrLen)
 	for i := 0; i < arrLen; i++ {
-		bridgedElem, err := bridgeValue(v.Index(i))
+		bridged, err := bridgeValue(v.Index(i))
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, bridgedElem)
+		bridgedElems[i] = reflect.ValueOf(bridged)
 	}
-	return out, nil
+
+	outArrType := reflect.ArrayOf(arrLen, elemType)
+
+	if arrLen > 0 {
+		finalElemType := bridgedElems[0].Type()
+		outArrType = reflect.ArrayOf(arrLen, finalElemType)
+	}
+
+	outArrVal := reflect.New(outArrType).Elem()
+	for i := 0; i < arrLen; i++ {
+		bv := bridgedElems[i]
+		if !bv.Type().ConvertibleTo(outArrType.Elem()) {
+			return nil, fmt.Errorf("element %d not convertible from %v to %v",
+				i, bv.Type(), outArrType.Elem())
+		}
+		outArrVal.Index(i).Set(bv.Convert(outArrType.Elem()))
+	}
+
+	return outArrVal.Interface(), nil
 }
 
 func isUint256Type(t reflect.Type) bool {
