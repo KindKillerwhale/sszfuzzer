@@ -20,7 +20,7 @@ This project performs fuzzing on [karalabe/ssz](https://github.com/karalabe/ssz)
 
 ## Architecture Diagram
 
-![SSZ Fuzzer Architecture](diagram.png)
+![SSZ Fuzzer Architecture](docs/diagram.png)
 
 ----
 
