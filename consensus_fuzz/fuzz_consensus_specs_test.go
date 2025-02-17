@@ -6,10 +6,14 @@ package consensus_fuzz
 
 import (
 	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/holiman/uint256"
@@ -199,17 +203,21 @@ func FuzzConsensusSpecsWithdrawalVariation(f *testing.F) {
 func fuzzConsensusSpecType[T newableObject[U], U any](f *testing.F, kind string) {
 	// Fuzz logic
 	f.Fuzz(func(t *testing.T, inSSZ []byte) {
+		tm := NewTraceManager()
+
+		tm.recordStep("StartFuzz", len(inSSZ))
+
 		var valid bool
 
 		// (a) Try stream-based decode/encode roundtrip
 		{
 			obj := T(new(U))
-			if decodeStreamRoundtrip(t, inSSZ, obj) {
+			if decodeStreamRoundtrip(t, tm, inSSZ, obj) {
 				// If decode/encode succeeded, run final checks
 				finalChecks(t, inSSZ, obj)
 
 				// Do differential fuzz check
-				if differentialCheckFastssz[T, U](t, inSSZ) {
+				if differentialCheckFastssz[T, U](t, tm, inSSZ) {
 					valid = true
 				}
 			}
@@ -218,11 +226,11 @@ func fuzzConsensusSpecType[T newableObject[U], U any](f *testing.F, kind string)
 		// (b) If not valid yet, try buffer-based decode/encode roundtrip
 		if !valid {
 			obj2 := T(new(U))
-			if decodeBufferRoundtrip(t, inSSZ, obj2) {
+			if decodeBufferRoundtrip(t, tm, inSSZ, obj2) {
 				finalChecks(t, inSSZ, obj2)
 
 				// Do differential fuzz check
-				if differentialCheckFastssz[T, U](t, inSSZ) {
+				if differentialCheckFastssz[T, U](t, tm, inSSZ) {
 					valid = true
 				}
 			}
@@ -230,7 +238,7 @@ func fuzzConsensusSpecType[T newableObject[U], U any](f *testing.F, kind string)
 
 		// (c) If valid => do extra stateful/crossFork checks (handleValidCase)
 		if valid {
-			handleValidCase[T, U](t, inSSZ)
+			handleValidCase[T, U](t, tm, inSSZ)
 		}
 	})
 }
@@ -298,8 +306,15 @@ func collectValidCorpus[T newableObject[U], U any](f *testing.F, kind string, co
 
 // decodeStreamRoundtrip tries decoding the SSZ bytes in streaming mode,
 // then re-encodes them in streaming mode again, compares, and returns true if they match.
-func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) bool {
-	if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
+func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, tm *traceManager, inSSZ []byte, obj T) bool {
+	r := bytes.NewReader(inSSZ)
+	err := kssz.DecodeFromStreamOnFork(r, obj, uint32(len(inSSZ)), kssz.ForkFuture)
+
+	// Calculate leftover
+	leftover := r.Len()
+	tm.recordStep("DecodeFromStreamOnFork", leftover)
+
+	if err != nil {
 		// decode false -> roundtrip impossible
 		return false
 	}
@@ -308,16 +323,25 @@ func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte
 	// that the buffer decoder also succeeds parsing
 	blob := new(bytes.Buffer)
 	if err := kssz.EncodeToStreamOnFork(blob, obj, kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
+
 		t.Fatalf("failed to re-encode stream: %v", err)
 	}
 
+	tm.recordStep("EncodeToStreamOnFork", blob.Len())
+
 	if !bytes.Equal(blob.Bytes(), inSSZ) {
 		prefix := commonPrefix(blob.Bytes(), inSSZ)
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("re-encoded stream mismatch: have %x, want %x, common prefix %d, have left %x, want left %x",
 			blob, inSSZ, len(prefix), blob.Bytes()[len(prefix):], inSSZ[len(prefix):])
 	}
 
 	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("failed to decode buffer: %v", err)
 	}
 	return true
@@ -325,28 +349,43 @@ func decodeStreamRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte
 
 // decodeBufferRoundtrip tries decoding the SSZ bytes in buffer mode,
 // then re-encodes them in buffer mode again, compares, and returns true if they match.
-func decodeBufferRoundtrip[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) bool {
+func decodeBufferRoundtrip[T newableObject[U], U any](t *testing.T, tm *traceManager, inSSZ []byte, obj T) bool {
 	// Try the buffer encoder/decoder
 	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		return false
 	}
 
+	// leftover : the buffer method does not have a clear byte concept, so 0
+	tm.recordStep("DecodeFromBytesOnFork", 0)
+
 	// Buffer decoder succeeded, make sure it re-encodes correctly and
 	// that the stream decoder also succeeds parsing
 	bin := make([]byte, kssz.SizeOnFork(obj, kssz.ForkFuture))
 	if err := kssz.EncodeToBytesOnFork(bin, obj, kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("failed to re-encode buffer: %v", err)
 	}
 
+	tm.recordStep("EncodeToBytesOnFork", len(bin))
+
 	if !bytes.Equal(bin, inSSZ) {
 		prefix := commonPrefix(bin, inSSZ)
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("re-encoded buffer mismatch: have %x, want %x, common prefix %d, have left %x, want left %x",
 			bin, inSSZ, len(prefix), bin[len(prefix):], inSSZ[len(prefix):])
 	}
 
-	if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
+	r := bytes.NewReader(inSSZ)
+	if err := kssz.DecodeFromStreamOnFork(r, obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("failed to decode stream: %v", err)
 	}
+
+	tm.recordStep("DecodeFromStreamOnFork", r.Len())
+
 	return true
 }
 
@@ -370,7 +409,7 @@ func finalChecks[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) {
 // handleValidCase (stateful leftover decode, crossForkCheck)
 // --------------------------------------------------------
 
-func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte) {
+func handleValidCase[T newableObject[U], U any](t *testing.T, tm *traceManager, inSSZ []byte) {
 
 	// Try the stream encoder/decoder into a prepped object
 	obj := T(new(U))
@@ -385,18 +424,32 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte) {
 	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		panic(err) // we've already decoded this, cannot fail
 	}
+	tm.recordStep("handleValidCase-DecodeFromBytesOnFork", 0)
 
-	if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
+	r := bytes.NewReader(inSSZ)
+	if err := kssz.DecodeFromStreamOnFork(r, obj, uint32(len(inSSZ)), kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
+
 		t.Fatalf("failed to decode stream into used object: %v", err)
 	}
 
+	leftover := r.Len()
+	tm.recordStep("handleValidCase-DecodeFromStreamOnFork", leftover)
+
 	blob := new(bytes.Buffer)
 	if err := kssz.EncodeToStreamOnFork(blob, obj, kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("failed to re-encode stream from used object: %v", err)
 	}
 
+	tm.recordStep("handleValidCase-EncodeToStreamOnFork", blob.Len())
+
 	if !bytes.Equal(blob.Bytes(), inSSZ) {
 		prefix := commonPrefix(blob.Bytes(), inSSZ)
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("re-encoded stream from used object mismatch: have %x, want %x, common prefix %d, have left %x, want left %x",
 			blob, inSSZ, len(prefix), blob.Bytes()[len(prefix):], inSSZ[len(prefix):])
 	}
@@ -413,15 +466,27 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte) {
 	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
 		panic(err) // we've already decoded this, cannot fail
 	}
+	tm.recordStep("handleValidCase-DecodeFromBytesOnFork", 0)
+
 	if err := kssz.DecodeFromBytesOnFork(inSSZ, obj, kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("failed to decode buffer into used object: %v", err)
 	}
+	tm.recordStep("handleValidCase-DecodeFromBytesOnFork", 0)
+
 	bin := make([]byte, kssz.SizeOnFork(obj, kssz.ForkFuture))
 	if err := kssz.EncodeToBytesOnFork(bin, obj, kssz.ForkFuture); err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("failed to re-encode buffer from used object: %v", err)
 	}
+	tm.recordStep("handleValidCase-EncodeToBytesOnFork", len(bin))
+
 	if !bytes.Equal(bin, inSSZ) {
 		prefix := commonPrefix(bin, inSSZ)
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
 		t.Fatalf("re-encoded buffer from used object mismatch: have %x, want %x, common prefix %d, have left %x, want left %x",
 			bin, inSSZ, len(prefix), bin[len(prefix):], inSSZ[len(prefix):])
 	}
@@ -429,11 +494,11 @@ func handleValidCase[T newableObject[U], U any](t *testing.T, inSSZ []byte) {
 	finalChecks(t, inSSZ, obj)
 
 	// cross fork decode
-	crossForkCheck(t, inSSZ, obj)
+	crossForkCheck(t, tm, inSSZ, obj)
 }
 
 // crossForkCheck : decode 'inSSZ' for all known forks => coverage
-func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T) {
+func crossForkCheck[T newableObject[U], U any](t *testing.T, tm *traceManager, inSSZ []byte, obj T) {
 	for forkName, forkVal := range kssz.ForkMapping {
 		// skip unknown => or keep it if you want
 		if forkVal == kssz.ForkUnknown {
@@ -444,15 +509,28 @@ func crossForkCheck[T newableObject[U], U any](t *testing.T, inSSZ []byte, obj T
 			cl.ClearSSZ()
 		}
 
-		if err := kssz.DecodeFromStreamOnFork(bytes.NewReader(inSSZ), obj, uint32(len(inSSZ)), forkVal); err == nil {
+		r := bytes.NewReader(inSSZ)
+		err := kssz.DecodeFromStreamOnFork(r, obj, uint32(len(inSSZ)), forkVal)
+
+		leftover := r.Len() // leftover
+		tm.recordStep(fmt.Sprintf("crossFork-decode-%s", forkName), leftover)
+
+		if err == nil {
 			// success => re-encode just for coverage
 			sz2 := kssz.SizeOnFork(obj, forkVal)
 			out := make([]byte, sz2)
 			if err2 := kssz.EncodeToBytesOnFork(out, obj, forkVal); err2 == nil {
+				// success => leftover = len(out)
+				tm.recordStep(fmt.Sprintf("crossFork-encode-%s", forkName), len(out))
+
 				// t.Logf("[crossFork] fork=%s => decode+encode ok (size=%d)", forkName, sz2)
 				continue
 			} else {
-				t.Logf("[crossFork] fork=%s => re-encode fail: %v", forkName, err2)
+				scenario := tm.buildScenario(inSSZ)
+				dumpTraceScenario(scenario)
+
+				t.Fatalf("[crossFork] fork=%s => re-encode fail: %v", forkName, err2)
+				// t.Logf("[crossFork] fork=%s => re-encode fail: %v", forkName, err2)
 			}
 		} else {
 			t.Logf("[crossFork] fork=%s => decode fail: %v", forkName, err)
@@ -578,7 +656,7 @@ func newFastsszObjectFromKaralabeType(typ reflect.Type) (Object, error) {
 	return newFastsszObjectByType(typ)
 }
 
-func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []byte) bool {
+func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, tm *traceManager, inSSZ []byte) bool {
 	// 1) Decode with karalabe/ssz
 	objKaralabe := T(new(U))
 
@@ -592,6 +670,9 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 		return false
 	}
 
+	// leftover = ?
+	tm.recordStep("DiffFuzz-DecodeFromBytesOnFork", 0)
+
 	// 2) Decode with fastssz
 	objFastssz, err := newFastsszObject[T]()
 	if err != nil {
@@ -604,9 +685,14 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 		return false
 	}
 
+	tm.recordStep("DiffFuzz-fastssz-UnmarshalSSZ", 0)
+
 	// 3) karalabe -> fastssz Bridging
 	bridged, err := BridgeKaralabeToFastssz(objKaralabe)
 	if err != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
+
 		t.Fatalf("[DiffFuzz] bridging karalabe->fastssz error: %v\n", err)
 		return false
 	}
@@ -614,6 +700,9 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 	// 3) bridged vs objFastssz
 	diff := cmp.Diff(bridged, objFastssz)
 	if diff != "" {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
+
 		t.Fatalf("[DiffFuzz] Decoded object mismatch => (karalabe->bridged) vs fastssz\nDiff:\n%s", diff)
 		return false
 	}
@@ -621,18 +710,30 @@ func differentialCheckFastssz[T newableObject[U], U any](t *testing.T, inSSZ []b
 	// 4) Re-encode with fastssz (bridged vs direct)
 	outF1, err1 := marshalAsFastssz(bridged)
 	if err1 != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
+
 		t.Fatalf("[DiffFuzz] fail to re-encode bridged (fastssz): %v", err1)
 		return false
 	}
+	tm.recordStep("DiffFuzz-encoded-bridged", len(outF1))
+
 	outF2, err2 := objFastssz.MarshalSSZ()
 	if err2 != nil {
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
+
 		t.Fatalf("[DiffFuzz] fastssz re-encode fail: %v", err2)
 		return false
 	}
+	tm.recordStep("DiffFuzz-encoded-fastssz", len(outF2))
 
 	// 5) Compare re-encoded bytes
 	if !bytes.Equal(outF1, outF2) {
 		prefix := commonPrefix(outF1, outF2)
+		scenario := tm.buildScenario(inSSZ)
+		dumpTraceScenario(scenario)
+
 		t.Fatalf("[DiffFuzz] SSZ mismatch => bridged vs fastssz\n"+
 			"common prefix length: %d\n"+
 			"bridged-len=%d fastssz-len=%d\n"+
@@ -834,4 +935,61 @@ func convertUint256ToByte32(x *uint256.Int) [32]byte {
 	}
 	out = x.Bytes32()
 	return out
+}
+
+type traceStep struct {
+	Method string `json:"method"`
+	// ObjType  string `json:"obj_type"`
+	Leftover int `json:"leftover"`
+}
+
+type traceScenario struct {
+	InputHex string      `json:"input_hex"`
+	Steps    []traceStep `json:"steps"`
+}
+
+type traceManager struct {
+	mu    sync.Mutex
+	steps []traceStep
+}
+
+func NewTraceManager() *traceManager {
+	return &traceManager{}
+}
+
+func (tm *traceManager) recordStep(method string, leftover int) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.steps = append(tm.steps, traceStep{
+		Method: method,
+		// ObjType: objType,
+		Leftover: leftover,
+	})
+}
+
+func (tm *traceManager) buildScenario(input []byte) traceScenario {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	copied := make([]traceStep, len(tm.steps))
+	copy(copied, tm.steps)
+
+	return traceScenario{
+		InputHex: hex.EncodeToString(input),
+		Steps:    copied,
+	}
+}
+
+func dumpTraceScenario(s traceScenario) {
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal scenario: %v\n", err)
+		return
+	}
+	filename := fmt.Sprintf("crash_%d.json", time.Now().UnixNano())
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write scenario: %v\n", err)
+	} else {
+		fmt.Fprintf(os.Stderr, "Crash scenario dumped to %s\n", filename)
+	}
 }
