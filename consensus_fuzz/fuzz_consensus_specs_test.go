@@ -764,6 +764,13 @@ func bridgeValue(v reflect.Value) (any, error) {
 		if v.IsNil() {
 			return zeroForPointerType(v.Type()), nil
 		}
+		if isUint256Type(v.Type()) {
+			ptr, ok := v.Interface().(*uint256.Int)
+			if !ok {
+				return nil, fmt.Errorf("not *uint256.Int")
+			}
+			return convertUint256ToByte32(ptr), nil
+		}
 		return bridgeValue(v.Elem())
 
 	case reflect.Uint8: // byte
@@ -925,6 +932,10 @@ func bridgeArray(v reflect.Value) (any, error) {
 }
 
 func isUint256Type(t reflect.Type) bool {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
 	return (t.PkgPath() == "github.com/holiman/uint256" && t.Name() == "Int")
 }
 
